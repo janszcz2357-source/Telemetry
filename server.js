@@ -12,6 +12,9 @@ wss.on('connection', (ws) => {
     connectedDevices.add(ws);
 
     ws.on('message', (message) => {
+        // TA LINIEWKA POKAŻE NAM W LOGACH RENDERA CZY COŚ TU WPADA:
+        console.log(`[SERWER] Otrzymano pakiet: ${message.toString().substring(0, 60)}...`);
+        
         const rawData = message.toString();
         for (let device of connectedDevices) {
             if (device !== ws && device.readyState === 1) {
