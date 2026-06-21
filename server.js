@@ -1,34 +1,75 @@
-const { WebSocketServer } = require('ws');
+// server.js
+// Działa na Render. Robi dwie rzeczy:
+// 1) Przyjmuje telemetrię z client.js (Twojego komputera z ACC) po WebSocket
+//    i rozsyła ją do wszystkich podłączonych przeglądarek (dashboardów).
+// 2) Serwuje plik public/index.html pod tym samym adresem.
 
-const PORT = process.env.PORT || 8080;
-const wss = new WebSocketServer({ port: PORT });
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const WebSocket = require('ws');
 
-console.log(`[SERWER ONLINE] Główna aplikacja telemetryczna działa na porcie ${PORT}`);
+const PORT = process.env.PORT || 10000;
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
-const connectedDevices = new Set();
+const MIME = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+};
+
+let lastMessage = null; // ostatnia telemetria - nowy widz dostaje ją od razu, bez czekania na kolejny tick
+
+const server = http.createServer((req, res) => {
+    let filePath = req.url === '/' ? '/index.html' : req.url;
+    filePath = path.join(PUBLIC_DIR, filePath);
+
+    // proste zabezpieczenie przed wyjściem poza PUBLIC_DIR
+    if (!filePath.startsWith(PUBLIC_DIR)) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
+
+    fs.readFile(filePath, (err, content) => {
+        if (err) {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('Not found');
+            return;
+        }
+        const ext = path.extname(filePath);
+        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+        res.end(content);
+    });
+});
+
+const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
-    console.log('[SERWER] Nowe urządzenie połączyło się.');
-    connectedDevices.add(ws);
+    console.log(`[SERVER] Klient połączony. Razem: ${wss.clients.size}`);
 
-    ws.on('message', (message) => {
-        // TA LINIEWKA POKAŻE NAM W LOGACH RENDERA CZY COŚ TU WPADA:
-        console.log(`[SERWER] Otrzymano pakiet: ${message.toString().substring(0, 60)}...`);
-        
-        const rawData = message.toString();
-        for (let device of connectedDevices) {
-            if (device !== ws && device.readyState === 1) {
-                device.send(rawData);
+    if (lastMessage) {
+        try { ws.send(lastMessage); } catch (e) {}
+    }
+
+    ws.on('message', (raw) => {
+        const str = raw.toString();
+        lastMessage = str;
+        wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(str);
             }
-        }
+        });
     });
 
     ws.on('close', () => {
-        console.log('[SERWER] Urządzenie rozłączone.');
-        connectedDevices.delete(ws);
+        console.log(`[SERVER] Klient rozłączony. Razem: ${wss.clients.size}`);
     });
 
-    ws.on('error', (error) => {
-        console.error('[SERWER BLAD]:', error.message);
-    });
+    ws.on('error', () => {});
+});
+
+server.listen(PORT, () => {
+    console.log(`[SERVER] Nasłuch na porcie ${PORT}`);
 });
