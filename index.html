@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACC Live Telemetry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --panel: #14171c;
+    --panel-border: #262b33;
+    --text: #e8e6e1;
+    --text-dim: #7d8590;
+    --amber: #ff6b1a;
+    --cyan: #3fd0c9;
+    --red: #ff3b3b;
+    --yellow: #ffd23f;
+    --blue: #3f8cff;
+    --green: #3fd16b;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 0 0 32px;
+  }
+
+  /* ---------- shift light bar (signature element) ---------- */
+  #shiftbar {
+    display: flex;
+    gap: 3px;
+    padding: 10px 12px;
+    background: #050607;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  #shiftbar .led {
+    flex: 1;
+    height: 10px;
+    border-radius: 2px;
+    background: #1a1d22;
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+  }
+  #shiftbar .led.on-green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  #shiftbar .led.on-amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  #shiftbar .led.on-red   { background: var(--red); box-shadow: 0 0 10px var(--red); }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px 4px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header .title {
+    font-family: var(--mono);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    font-size: 14px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  #status {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+  }
+  #status.live { color: var(--green); border-color: var(--green); }
+  #status.down { color: var(--red); border-color: var(--red); }
+
+  /* ---------- flag banner ---------- */
+  #flagbanner {
+    margin: 10px 20px 0;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-align: center;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    transition: all 150ms ease;
+  }
+  #flagbanner.flag-yellow { background: var(--yellow); color: #1a1500; border-color: var(--yellow); }
+  #flagbanner.flag-blue { background: var(--blue); color: #fff; border-color: var(--blue); }
+  #flagbanner.flag-green { background: var(--green); color: #04220f; border-color: var(--green); }
+  #flagbanner.flag-white { background: #f2f2f2; color: #111; border-color: #f2f2f2; }
+  #flagbanner.flag-black { background: #000; color: var(--red); border: 1px solid var(--red); }
+  #flagbanner.flag-checkered { background: repeating-linear-gradient(45deg,#fff 0 10px,#111 10px 20px); color: #fff; text-shadow: 0 0 4px #000; }
+  #flagbanner.flag-orange { background: #ff8c1a; color: #1a0d00; border-color: #ff8c1a; }
+  #flagbanner.flag-penalty { background: var(--red); color: #fff; border-color: var(--red); }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1.3fr 1fr;
+    gap: 14px;
+    padding: 14px 20px;
+  }
+  @media (max-width: 880px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .panel h2 {
+    margin: 0 0 12px;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+
+  /* ---------- center dash ---------- */
+  #dash {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 28px;
+    padding: 26px 16px;
+  }
+  #gear {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 96px;
+    line-height: 1;
+    color: var(--amber);
+    min-width: 90px;
+    text-align: center;
+  }
+  #speed-wrap { text-align: center; }
+  #speed {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 64px;
+    line-height: 1;
+  }
+  #speed-unit { font-family: var(--mono); color: var(--text-dim); font-size: 14px; letter-spacing: 0.1em; }
+  #rpm-wrap { text-align: center; margin-top: 6px; }
+  #rpm { font-family: var(--mono); font-size: 22px; color: var(--text-dim); }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--panel-border);
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: var(--text-dim); font-family: var(--sans); font-size: 13px; }
+  .stat-row .value { font-weight: 700; }
+
+  .bar-track {
+    width: 60px;
+    height: 6px;
+    background: #1a1d22;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill { height: 100%; background: var(--cyan); }
+
+  #gaps { display: flex; gap: 10px; }
+  .gap-box {
+    flex: 1;
+    background: #1a1d22;
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+  }
+  .gap-box .gap-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+  .gap-box .gap-value { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--cyan); margin-top: 4px; }
+
+  #driver-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  #driver-number {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 22px;
+    background: var(--amber);
+    color: #1a0d00;
+    border-radius: 6px;
+    padding: 6px 10px;
+    min-width: 38px;
+    text-align: center;
+  }
+  #driver-name { font-weight: 700; font-size: 15px; }
+  #driver-team { font-size: 12px; color: var(--text-dim); }
+
+  table#standings { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+  table#standings th { text-align: left; color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; padding: 4px 6px; }
+  table#standings td { padding: 5px 6px; border-top: 1px solid var(--panel-border); }
+  table#standings tr.me td { color: var(--amber); font-weight: 700; }
+
+  #events { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+  .event-item { font-family: var(--mono); font-size: 12px; color: var(--text-dim); padding: 6px 8px; background: #1a1d22; border-radius: 4px; }
+  .event-item .ev-type { color: var(--cyan); font-weight: 700; }
+
+  #session-bar {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 10px 20px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  #session-bar span b { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div id="shiftbar"></div>
+
+<header>
+  <div class="title">ACC // Live Telemetry</div>
+  <div id="status" class="down">Connecting…</div>
+</header>
+
+<div id="session-bar">
+  <span>Track: <b id="s-track">--</b></span>
+  <span>Session: <b id="s-type">--</b></span>
+  <span>Air: <b id="s-air">--</b>°C</span>
+  <span>Track: <b id="s-track-temp">--</b>°C</span>
+  <span>Rain: <b id="s-rain">--</b></span>
+</div>
+
+<div id="flagbanner">NO FLAG</div>
+
+<main>
+  <!-- LEFT: lap + penalty -->
+  <div class="panel">
+    <h2>Lap</h2>
+    <div class="stat-row"><span class="label">Current</span><span class="value" id="lap-current">--:--.---</span></div>
+    <div class="stat-row"><span class="label">Best</span><span class="value" id="lap-best">--:--.---</span></div>
+    <div class="stat-row"><span class="label">Delta</span><span class="value" id="lap-delta">0.000</span></div>
+
+    <h2 style="margin-top:18px;">Penalty</h2>
+    <div class="stat-row"><span class="label">Status</span><span class="value" id="penalty-type">NONE</span></div>
+    <div class="stat-row"><span class="label">Time left</span><span class="value" id="penalty-time">--</span></div>
+
+    <h2 style="margin-top:18px;">Car</h2>
+    <div class="stat-row"><span class="label">Fuel</span><span class="value" id="fuel">-- L</span></div>
+    <div class="stat-row"><span class="label">TC</span><div class="bar-track"><div class="bar-fill" id="tc-bar" style="width:0%"></div></div></div>
+    <div class="stat-row"><span class="label">ABS</span><div class="bar-track"><div class="bar-fill" id="abs-bar" style="width:0%"></div></div></div>
+  </div>
+
+  <!-- CENTER: dash + gaps -->
+  <div>
+    <div class="panel">
+      <div id="dash">
+        <div id="gear">N</div>
+        <div id="speed-wrap">
+          <div id="speed">0</div>
+          <div id="speed-unit">KM/H</div>
+          <div id="rpm-wrap"><span id="rpm">0</span> RPM</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px;">
+      <h2>Gap</h2>
+      <div id="gaps">
+        <div class="gap-box"><div class="gap-label">Ahead</div><div class="gap-value" id="gap-ahead">--</div></div>
+        <div class="gap-box"><div class="gap-label">Behind</div><div class="gap-value" id="gap-behind">--</div></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px;">
+      <h2>Events</h2>
+      <div id="events"><div class="event-item">Waiting for data…</div></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: driver + standings -->
+  <div class="panel">
+    <h2>Driver</h2>
+    <div id="driver-card">
+      <div id="driver-number">--</div>
+      <div>
+        <div id="driver-name">--</div>
+        <div id="driver-team">--</div>
+      </div>
+    </div>
+    <div class="stat-row"><span class="label">Position</span><span class="value" id="position">--</span></div>
+
+    <h2 style="margin-top:18px;">Standings</h2>
+    <table id="standings">
+      <thead><tr><th>P</th><th>Driver</th><th>Lap</th></tr></thead>
+      <tbody><tr><td colspan="3" style="color:var(--text-dim)">No data yet</td></tr></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const NUM_LEDS = 20;
+const ASSUMED_REDLINE = 8500; // ACC nie wysyła max RPM przez ten kanał danych - to przybliżenie do paska świateł
+
+const shiftbar = document.getElementById('shiftbar');
+for (let i = 0; i < NUM_LEDS; i++) {
+  const led = document.createElement('div');
+  led.className = 'led';
+  shiftbar.appendChild(led);
+}
+const leds = [...shiftbar.children];
+
+function updateShiftbar(rpm) {
+  const pct = Math.max(0, Math.min(1, rpm / ASSUMED_REDLINE));
+  const litCount = Math.round(pct * NUM_LEDS);
+  leds.forEach((led, i) => {
+    led.classList.remove('on-green', 'on-amber', 'on-red');
+    if (i < litCount) {
+      if (i < NUM_LEDS * 0.55) led.classList.add('on-green');
+      else if (i < NUM_LEDS * 0.85) led.classList.add('on-amber');
+      else led.classList.add('on-red');
+    }
+  });
+}
+
+function setStatus(connected) {
+  const el = document.getElementById('status');
+  el.textContent = connected ? 'Live' : 'Disconnected — retrying…';
+  el.className = connected ? 'live' : 'down';
+}
+
+function setFlag(flag) {
+  const el = document.getElementById('flagbanner');
+  el.className = '';
+  const map = {
+    NONE: ['NO FLAG', ''],
+    YELLOW: ['YELLOW FLAG — CAUTION', 'flag-yellow'],
+    BLUE: ['BLUE FLAG — FASTER CAR BEHIND', 'flag-blue'],
+    GREEN: ['GREEN FLAG', 'flag-green'],
+    WHITE: ['WHITE FLAG — SLOW CAR AHEAD', 'flag-white'],
+    BLACK: ['BLACK FLAG', 'flag-black'],
+    CHECKERED: ['CHECKERED FLAG', 'flag-checkered'],
+    ORANGE: ['MECHANICAL FAILURE', 'flag-orange'],
+    PENALTY: ['PENALTY FLAG', 'flag-penalty'],
+  };
+  const [label, cls] = map[flag] || [flag || 'NO FLAG', ''];
+  el.textContent = label;
+  if (cls) el.classList.add(cls);
+}
+
+function fmtGap(v) {
+  if (v === null || v === undefined) return '--';
+  return Math.abs(v).toFixed(2);
+}
+
+function render(data) {
+  if (!data) return;
+  const p = data.physics || {};
+  const lap = data.lap || {};
+  const gaps = data.gaps || {};
+  const penalty = data.penalty || {};
+  const driver = data.driver || {};
+  const session = data.session || {};
+
+  document.getElementById('gear').textContent = p.gear === '-1' ? 'R' : (p.gear === '0' ? 'N' : p.gear ?? '-');
+  document.getElementById('speed').textContent = p.speedKmh ?? 0;
+  document.getElementById('rpm').textContent = p.rpms ?? 0;
+  updateShiftbar(p.rpms || 0);
+
+  document.getElementById('fuel').textContent = (p.fuel ?? 0) + ' L';
+  document.getElementById('tc-bar').style.width = Math.min(100, (p.tc || 0) * 10) + '%';
+  document.getElementById('abs-bar').style.width = Math.min(100, (p.abs || 0) * 10) + '%';
+
+  document.getElementById('lap-current').textContent = lap.currentTime ?? '--:--.---';
+  document.getElementById('lap-best').textContent = lap.bestTime ?? '--:--.---';
+  document.getElementById('lap-delta').textContent = lap.delta ?? '0.000';
+
+  document.getElementById('penalty-type').textContent = penalty.type ?? 'NONE';
+  document.getElementById('penalty-time').textContent = penalty.timeLeft ? penalty.timeLeft + ' s' : '--';
+
+  document.getElementById('position').textContent = data.position ?? '--';
+
+  setFlag(data.flag);
+
+  document.getElementById('gap-ahead').textContent = fmtGap(gaps.ahead);
+  document.getElementById('gap-behind').textContent = fmtGap(gaps.behind);
+
+  if (driver) {
+    document.getElementById('driver-number').textContent = driver.raceNumber ?? '--';
+    document.getElementById('driver-name').textContent = driver.fullName || driver.shortName || '--';
+    document.getElementById('driver-team').textContent = driver.teamName || '--';
+  }
+
+  document.getElementById('s-track').textContent = session.trackName || '--';
+  document.getElementById('s-type').textContent = [session.sessionType, session.phase].filter(Boolean).join(' / ') || '--';
+  document.getElementById('s-air').textContent = session.ambientTemp ?? '--';
+  document.getElementById('s-track-temp').textContent = session.trackTemp ?? '--';
+  document.getElementById('s-rain').textContent = session.rainLevel != null ? (session.rainLevel * 100).toFixed(0) + '%' : '--';
+
+  const standingsBody = document.querySelector('#standings tbody');
+  if (data.standings && data.standings.length) {
+    standingsBody.innerHTML = data.standings.map(s =>
+      `<tr class="${s.isPlayer ? 'me' : ''}"><td>${s.position ?? '-'}</td><td>${s.driverName}</td><td>${s.laps ?? '-'}</td></tr>`
+    ).join('');
+  }
+
+  const eventsEl = document.getElementById('events');
+  if (data.events && data.events.length) {
+    eventsEl.innerHTML = data.events.map(e =>
+      `<div class="event-item"><span class="ev-type">${e.type}</span>${e.msg ? ' — ' + e.msg : ''}</div>`
+    ).join('');
+  }
+}
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const ws = new WebSocket(proto + location.host);
+
+  ws.onopen = () => setStatus(true);
+  ws.onclose = () => { setStatus(false); setTimeout(connect, 3000); };
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'TELEMETRY') render(msg.data);
+    } catch (e) {}
+  };
+}
+connect();
+</script>
+
+</body>
+</html>
