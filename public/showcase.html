@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACC Telemetry Live – Showcase</title>
+<meta name="description" content="Real-time Assetto Corsa Competizione telemetry, streamed from the sim rig to any browser through a tiny WebSocket relay.">
+<meta name="theme-color" content="#0b0d10">
+<meta property="og:title" content="ACC Telemetry Live">
+<meta property="og:description" content="Your lap, live in every browser. WebSocket relay + dashboard host for ACC telemetry.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0d10'/%3E%3Cpath d='M3 22l6-8 5 5 6-12 9 14' fill='none' stroke='%23ffb000' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0b0d10; --panel:#12161b; --line:#262e38; --text:#e8ecf1; --muted:#a3adb9;
+  --amber:#ffb000; --green:#3ddc84; --red:#ff5a5a; --blue:#5aa9ff;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --r:10px; --gutter:clamp(16px,4vw,40px);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:1rem/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+img,svg,canvas{display:block;max-width:100%}
+a{color:var(--amber)}
+:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:4px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--amber);color:#000;padding:8px 14px;border-radius:6px;z-index:10}
+.skip:focus{left:8px}
+.wrap{width:min(1120px,100% - 2*var(--gutter));margin-inline:auto}
+header.site{position:sticky;top:0;z-index:5;background:rgba(11,13,16,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header.site .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:60px;flex-wrap:wrap}
+.brand{font:700 1rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:10px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(255,90,90,.6);animation:pulse 1.6s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(255,90,90,0)}100%{box-shadow:0 0 0 0 rgba(255,90,90,0)}}
+nav ul{display:flex;gap:4px;list-style:none;margin:0;padding:0;flex-wrap:wrap}
+nav a{display:inline-block;padding:10px 12px;color:var(--muted);text-decoration:none;border-radius:6px;font-size:.95rem}
+nav a:hover{color:var(--text)}
+.hero{padding:clamp(40px,8vw,96px) 0 32px}
+.eyebrow{font:600 .8rem var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin:0 0 16px}
+h1{font-size:clamp(2.4rem,8vw,5.6rem);line-height:.98;letter-spacing:-.03em;margin:0 0 20px;font-weight:800;max-width:14ch}
+h1 em{font-style:normal;color:var(--amber)}
+.lede{font-size:clamp(1.05rem,2.2vw,1.3rem);color:var(--muted);max-width:56ch;margin:0 0 28px}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;min-height:46px;padding:0 22px;border-radius:8px;font-weight:700;text-decoration:none;border:2px solid var(--amber);color:var(--amber)}
+.btn.primary{background:var(--amber);color:#111}
+.btn:hover{filter:brightness(1.12)}
+.scope{margin-top:44px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.scope-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);font:.8rem var(--mono);color:var(--muted)}
+.legend{display:flex;gap:16px;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:12px;height:3px;margin-right:6px;vertical-align:middle;background:currentColor}
+.l-speed{color:var(--blue)}.l-thr{color:var(--green)}.l-brk{color:var(--red)}
+#trace{width:100%;height:clamp(200px,34vw,320px)}
+.toggle{background:none;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer;min-height:36px}
+.toggle:hover{border-color:var(--amber)}
+.cluster{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.cell{background:var(--panel);padding:16px}
+.cell small{display:block;font:.72rem var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.cell b{display:block;font:700 clamp(1.8rem,4vw,2.6rem) var(--mono);line-height:1.15;font-variant-numeric:tabular-nums}
+.cell .bar{height:6px;background:#1c232c;border-radius:3px;margin-top:8px;overflow:hidden}
+.cell .bar i{display:block;height:100%;width:0;background:var(--amber)}
+.note{font-size:.85rem;color:var(--muted);margin:10px 2px 0}
+section{padding:clamp(48px,8vw,96px) 0}
+section+section{border-top:1px solid var(--line)}
+h2{font-size:clamp(1.8rem,4.5vw,3rem);line-height:1.05;letter-spacing:-.02em;margin:0 0 12px}
+.sub{color:var(--muted);max-width:60ch;margin:0 0 40px}
+.flow{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));counter-reset:s;list-style:none;padding:0;margin:0}
+.flow li{counter-increment:s;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px;position:relative}
+.flow li::before{content:"0" counter(s);font:700 .85rem var(--mono);color:var(--amber);display:block;margin-bottom:12px}
+.flow h3{margin:0 0 6px;font-size:1.15rem}
+.flow p{margin:0;color:var(--muted);font-size:.95rem}
+.flow code{font-family:var(--mono);font-size:.85em;color:var(--text);background:#1c232c;padding:1px 6px;border-radius:4px}
+.split{display:grid;gap:32px;grid-template-columns:1fr}
+@media(min-width:860px){.split{grid-template-columns:1.1fr .9fr;align-items:center}}
+.map{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+#map{width:100%;height:auto;aspect-ratio:1/1;max-height:420px;margin:auto}
+.feat{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:22px;background:var(--panel)}
+.card h3{margin:0 0 8px;font-size:1.1rem}
+.card p{margin:0;color:var(--muted);font-size:.95rem}
+.cta{text-align:center}
+.cta h2{margin-inline:auto;max-width:18ch}
+.cta .sub{margin-inline:auto}
+.cta .btns{justify-content:center}
+footer{border-top:1px solid var(--line);padding:28px 0;color:var(--muted);font-size:.88rem}
+footer .wrap{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .6s,transform .6s}
+.reveal.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .dot{animation:none}
+  .reveal{opacity:1;transform:none;transition:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="dot" aria-hidden="true"></span>ACC Telemetry</a>
+    <nav aria-label="Primary">
+      <ul>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#lap">The lap</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#start">Get started</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<div class="hero" id="top">
+  <div class="wrap">
+    <p class="eyebrow">Assetto Corsa Competizione · Live telemetry</p>
+    <h1>Your lap, <em>live</em> in every browser.</h1>
+    <p class="lede">Drive on your rig. Everyone else watches speed, throttle, brake and gear stream in real time — no install, just a link. One small WebSocket relay does the heavy lifting.</p>
+    <div class="btns">
+      <a class="btn primary" href="/">Open the dashboard</a>
+      <a class="btn" href="#how">See how it works</a>
+    </div>
+
+    <div class="scope" role="group" aria-label="Simulated telemetry demo">
+      <div class="scope-head">
+        <div class="legend" aria-hidden="true"><span class="l-speed">Speed</span><span class="l-thr">Throttle</span><span class="l-brk">Brake</span></div>
+        <button class="toggle" id="pause" type="button" aria-pressed="false">Pause</button>
+      </div>
+      <canvas id="trace" role="img" aria-label="Scrolling chart of speed, throttle and brake over the last eight seconds of a simulated lap"></canvas>
+      <div class="cluster" aria-live="off">
+        <div class="cell"><small>Speed km/h</small><b id="v-speed">0</b></div>
+        <div class="cell"><small>Gear</small><b id="v-gear">N</b></div>
+        <div class="cell"><small>RPM</small><b id="v-rpm">0</b><div class="bar"><i id="b-rpm"></i></div></div>
+        <div class="cell"><small>Throttle</small><b id="v-thr">0%</b><div class="bar"><i id="b-thr" style="background:var(--green)"></i></div></div>
+        <div class="cell"><small>Brake</small><b id="v-brk">0%</b><div class="bar"><i id="b-brk" style="background:var(--red)"></i></div></div>
+      </div>
+    </div>
+    <p class="note">Demo data is simulated in your browser for this page. The real dashboard shows your actual ACC session.</p>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap reveal">
+    <h2>Three hops, no fuss.</h2>
+    <p class="sub">Telemetry leaves your PC, passes through a relay, and lands on every connected screen within a tick.</p>
+    <ol class="flow">
+      <li><h3>Sim rig</h3><p>A client script next to ACC reads telemetry and pushes it over a WebSocket.</p></li>
+      <li><h3>Relay on Render</h3><p><code>server.js</code> accepts each message and fans it out to every other connected client.</p></li>
+      <li><h3>Browsers</h3><p>The same server hosts the dashboard page, so viewers just open one URL.</p></li>
+      <li><h3>Instant context</h3><p>The relay remembers the last message, so a new viewer sees data immediately instead of waiting for the next tick.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="lap">
+  <div class="wrap split reveal">
+    <div>
+      <h2>Read the lap, not the numbers.</h2>
+      <p class="sub">Brake points, lift-and-coast, throttle pick-up — they show up as shapes. Watch the car on the map and the trace together and the corner you keep losing time in becomes obvious.</p>
+      <p class="note" style="margin:0">Track map: abstract demo circuit, not a real ACC track.</p>
+    </div>
+    <div class="map">
+      <svg id="map" viewBox="-130 -130 260 260" role="img" aria-label="Animated dot moving around an abstract circuit">
+        <path id="map-path" fill="none" stroke="#2c3642" stroke-width="10" stroke-linejoin="round"/>
+        <path id="map-line" fill="none" stroke="#0b0d10" stroke-width="2" stroke-dasharray="4 6" stroke-linejoin="round"/>
+        <circle id="map-car" r="7" fill="#ffb000" stroke="#0b0d10" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap reveal">
+    <h2>Small server, big view.</h2>
+    <p class="sub">Built to be cheap to host and easy to read.</p>
+    <div class="feat">
+      <div class="card"><h3>One URL for everyone</h3><p>Dashboard and WebSocket share the same address, so there is nothing to configure for viewers.</p></div>
+      <div class="card"><h3>Fan-out relay</h3><p>Any message from the rig is broadcast to all other connected browsers as it arrives.</p></div>
+      <div class="card"><h3>No empty screens</h3><p>Late joiners instantly receive the most recent telemetry frame.</p></div>
+      <div class="card"><h3>Tiny footprint</h3><p>Node 18+, a single dependency (<code>ws</code>), runs on Render's free-friendly setup.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="cta" id="start">
+  <div class="wrap reveal">
+    <h2>Green flag. Go live.</h2>
+    <p class="sub">Start the relay, point your client at it, and share the link.</p>
+    <div class="btns">
+      <a class="btn primary" href="/">Open the dashboard</a>
+      <a class="btn" href="https://github.com/janszcz2357-source/telemetry">View the code</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>ACC Telemetry · relay + dashboard host</span>
+    <span>Not affiliated with Kunos Simulazioni or 505 Games.</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- simulated lap model ---------- */
+  var LAP = 84;                    // seconds
+  var corners = [                  // position 0..1, width, minimum speed
+    {p:.10,w:.018,v:92},{p:.24,w:.025,v:140},{p:.37,w:.015,v:78},
+    {p:.52,w:.03,v:165},{p:.66,w:.016,v:88},{p:.80,w:.02,v:120},{p:.92,w:.014,v:105}
+  ];
+  var TOP = 288;
+  function speedAt(t){
+    var p = ((t % LAP) + LAP) % LAP / LAP, v = TOP;
+    for (var i=0;i<corners.length;i++){
+      var c = corners[i], d = (p - c.p) / c.w;
+      v -= (TOP - c.v) * Math.exp(-d*d);
+    }
+    return v;
+  }
+  function sample(t){
+    var v = speedAt(t), dv = (speedAt(t+.15) - speedAt(t-.15)) / .3; // km/h per s
+    var brake = Math.max(0, Math.min(1, -dv / 70));
+    var thr = brake > .02 ? 0 : Math.max(.25, Math.min(1, .45 + dv / 25 + (v > 270 ? .5 : 0)));
+    var gear = v < 60 ? 1 : v < 95 ? 2 : v < 130 ? 3 : v < 170 ? 4 : v < 215 ? 5 : 6;
+    var lo = [0,0,60,95,130,170,215][gear], hi = [0,60,95,130,170,215,290][gear];
+    var rpm = 3800 + (v - lo) / (hi - lo) * 3900 + thr * 250;
+    return {v:v, brake:brake, thr:thr, gear:gear, rpm:Math.min(8000, rpm), p:((t%LAP)+LAP)%LAP/LAP};
+  }
+
+  /* ---------- trace canvas ---------- */
+  var cv = document.getElementById("trace"), ctx = cv.getContext("2d");
+  var WINDOW = 8, W, H;
+  function resize(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2), r = cv.getBoundingClientRect();
+    W = r.width; H = r.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  function line(color, fn, h0, h1, t){
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = "round";
+    var n = Math.max(60, Math.floor(W / 3));
+    for (var i=0;i<=n;i++){
+      var tt = t - WINDOW + WINDOW * i / n, y = h1 - fn(sample(tt)) * (h1 - h0);
+      i ? ctx.lineTo(W * i / n, y) : ctx.moveTo(0, y);
+    }
+    ctx.stroke();
+  }
+  function draw(t){
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle = "#1d252e"; ctx.lineWidth = 1; ctx.beginPath();
+    for (var g=1; g<4; g++){ var y = H*g/4; ctx.moveTo(0,y); ctx.lineTo(W,y); }
+    for (var s=0; s<WINDOW; s++){ var x = W*s/WINDOW; ctx.moveTo(x,0); ctx.lineTo(x,H); }
+    ctx.stroke();
+    var pad = 14;
+    line("#5aa9ff", function(s){return s.v/300}, pad, H*.62, t);
+    line("#3ddc84", function(s){return s.thr}, H*.66, H-pad, t);
+    line("#ff5a5a", function(s){return s.brake}, H*.66, H-pad, t);
+    ctx.strokeStyle = "#ffb000"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(W-1,0); ctx.lineTo(W-1,H); ctx.stroke();
+  }
+
+  /* ---------- readouts + map ---------- */
+  var el = function(id){return document.getElementById(id)};
+  var vS=el("v-speed"), vG=el("v-gear"), vR=el("v-rpm"), vT=el("v-thr"), vB=el("v-brk"),
+      bR=el("b-rpm"), bT=el("b-thr"), bB=el("b-brk");
+  function readout(s){
+    vS.textContent = Math.round(s.v); vG.textContent = s.gear;
+    vR.textContent = Math.round(s.rpm / 10) * 10;
+    vT.textContent = Math.round(s.thr*100) + "%"; vB.textContent = Math.round(s.brake*100) + "%";
+    bR.style.width = (s.rpm/8000*100) + "%"; bT.style.width = (s.thr*100) + "%"; bB.style.width = (s.brake*100) + "%";
+  }
+  var pts = [], N = 240;
+  for (var i=0;i<N;i++){
+    var a = i / N * Math.PI * 2, r = 85 + 26*Math.cos(3*a) + 14*Math.sin(2*a + .6);
+    pts.push([r*Math.cos(a), r*Math.sin(a)*.85]);
+  }
+  var d = "M" + pts.map(function(p){return p[0].toFixed(1)+" "+p[1].toFixed(1)}).join(" L") + "Z";
+  el("map-path").setAttribute("d", d); el("map-line").setAttribute("d", d);
+  var car = el("map-car");
+  function placeCar(p){
+    var f = p * N, i0 = Math.floor(f) % N, i1 = (i0 + 1) % N, k = f - Math.floor(f);
+    car.setAttribute("cx", pts[i0][0] + (pts[i1][0]-pts[i0][0])*k);
+    car.setAttribute("cy", pts[i0][1] + (pts[i1][1]-pts[i0][1])*k);
+  }
+
+  /* ---------- loop / pause ---------- */
+  var t = 20, last = null, paused = reduce, raf = null, btn = el("pause");
+  function frame(now){
+    if (last !== null) t += (now - last) / 1000;
+    last = now;
+    var s = sample(t); draw(t); readout(s); placeCar(s.p);
+    raf = paused ? null : requestAnimationFrame(frame);
+  }
+  function setPaused(p){
+    paused = p; btn.textContent = p ? "Play" : "Pause"; btn.setAttribute("aria-pressed", String(p));
+    if (!p && !raf){ last = null; raf = requestAnimationFrame(frame); }
+  }
+  btn.addEventListener("click", function(){ setPaused(!paused); });
+  window.addEventListener("resize", function(){ resize(); if (paused) { var s = sample(t); draw(t); readout(s); placeCar(s.p); } });
+  resize();
+  btn.textContent = paused ? "Play" : "Pause"; btn.setAttribute("aria-pressed", String(paused));
+  var s0 = sample(t); draw(t); readout(s0); placeCar(s0.p);
+  if (!paused) raf = requestAnimationFrame(frame);
+  document.addEventListener("visibilitychange", function(){ if (document.hidden) last = null; });
+
+  /* ---------- reveal on scroll ---------- */
+  var items = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window && !reduce){
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if (e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } });
+    }, {threshold:.15});
+    items.forEach(function(n){ io.observe(n); });
+  } else items.forEach(function(n){ n.classList.add("in"); });
+})();
+</script>
+</body>
+</html>
